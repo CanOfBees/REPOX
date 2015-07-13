@@ -95,7 +95,7 @@ import pt.utl.ist.z3950.TimestampHarvester;
 public class DefaultDataManager implements DataManager {
   private static final Logger log = Logger.getLogger(DefaultDataManager.class);
   private static final String ID_REGULAR_EXPRESSION = "[a-zA-Z_0-9]*";
-  protected static final int ID_MAX_SIZE = 160;
+  protected static final int ID_MAX_SIZE = 40;
 
   protected File dataFile;
   protected MetadataTransformationManager metadataTransformationManager;
@@ -568,15 +568,10 @@ public class DefaultDataManager implements DataManager {
 
               harvestMethod = new IdSequenceHarvester(target, maximumId);
             }
-            long startDsZ39 = System.currentTimeMillis();
-            log.info("Create datasource Z39.");
-
+            
             dataSource =
                 new DataSourceZ3950(dataProvider, id, description, schema, namespace,
                     harvestMethod, recordIdPolicy, metadataTransformations);
-
-            long endDsZ39 = System.currentTimeMillis();
-            log.info("Create datasource Z39 in: " + (endDsZ39 - startDsZ39));
           } else {
             throw new RuntimeException("Loading configuration from Data Source of type "
                 + dataSourceType + " not implemented");
