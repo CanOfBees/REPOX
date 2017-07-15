@@ -1,22 +1,5 @@
 package pt.utl.ist.oai;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerException;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 import org.oclc.oai.harvester.verb.ListRecords;
@@ -24,11 +7,19 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
-
 import pt.utl.ist.configuration.ConfigSingleton;
 import pt.utl.ist.util.FileUtil;
 import pt.utl.ist.util.RunnableStoppable;
 import pt.utl.ist.util.StringUtil;
+
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import java.io.*;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 /**
  */
@@ -43,6 +34,7 @@ public class OaiHarvester implements RunnableStoppable {
     private static final short MAX_CONCURRENT_FILES_IN_SYSTEM = 10;
 
     private boolean             stopExecution                  = false;
+    private boolean             lastResumptionEmptyList        = false;
     private String              sourceUrl;
     private String              sourceSet;
     //	  YYYY = four-digit year ; MM = two-digit month (01=January, etc.) ; DD = two-digit day of month (01 through 31)
@@ -207,10 +199,11 @@ public class OaiHarvester implements RunnableStoppable {
             int currentRequest;
             ListRecords listRecords;
             File resumptionTokenFile = new File(resumptionTokenPath);
+            String resumptionToken = null;
             if (resumptionTokenFile.exists()) {
                 BufferedReader reader = new BufferedReader(new FileReader(resumptionTokenFile));
                 currentRequest = Integer.parseInt(reader.readLine());
-                String resumptionToken = reader.readLine();
+                resumptionToken = reader.readLine();
                 reader.close();
 
                 StringUtil.simpleLog("Using previous resumption token: " + resumptionToken, this.getClass(), logFile);
@@ -225,9 +218,24 @@ public class OaiHarvester implements RunnableStoppable {
                 numberOfRecordsPerResponse = listRecords.getRecordsNumberPerResponse();
             }
 
-            ingestionRecords += listRecords.getDocument().getElementsByTagName("record").getLength();
+            int batchCounter = listRecords.getDocument().getElementsByTagName("record").getLength();
+            if(batchCounter == 0)
+              batchCounter = listRecords.getDocument().getElementsByTagNameNS("http://www.openarchives.org/OAI/2.0/", "record").getLength();
+            if(batchCounter == 0)
+              StringUtil.simpleLog("Cannot read response, namespace of oai record is not correct!!", this.getClass(), logFile);
+            boolean isResponseEmpty =  (batchCounter == 0 ? true : false);
+            ingestionRecords += batchCounter;
+            
+            if (listRecords == null || listRecords.isResultEmpty() || isResponseEmpty) {
+                if(currentRequest == 1)
+                    StringUtil.simpleLog("Response was an empty list in operation ListRecords (may be invalid set or does not exist new records from the last ingest)", this.getClass(), logFile);
+                else if(resumptionToken != null && !resumptionToken.equals(""))
+                        StringUtil.simpleLog("Response with resumptionToken: " + resumptionToken + " was an empty list in operation ListRecords " +
+                                "(may be invalid set or does not exist new records from the last ingest)", this.getClass(), logFile);
+              lastResumptionEmptyList = true;
+            }
 
-            while (listRecords != null) {
+            while (listRecords != null && !listRecords.isResultEmpty() && !isResponseEmpty) {
                 //Block when a number of files in system, continue when there is space again
                 while (getRequestFile(currentRequest - MAX_CONCURRENT_FILES_IN_SYSTEM).exists()) {
                     try {
@@ -243,10 +251,6 @@ public class OaiHarvester implements RunnableStoppable {
 
                 long startTime = (new Date()).getTime();
 
-                if (listRecords.isResultEmpty()) {
-                    StringUtil.simpleLog("Response was an empty list in operation ListRecords (may be invalid set or does not exist new records from the last ingest)", this.getClass(), logFile);
-                }
-
                 NodeList errors = listRecords.getErrors();
                 if (errors != null && errors.getLength() > 0) {
                     processErrors(errors, logFile, listRecords);
@@ -259,7 +263,7 @@ public class OaiHarvester implements RunnableStoppable {
 
                 writeRequest(currentRequest, listRecords);
 
-                String resumptionToken = listRecords.getResumptionToken();
+                resumptionToken = listRecords.getResumptionToken();
 
                 if (resumptionToken == null || resumptionToken.length() == 0) {
                     StringUtil.simpleLog("Harvest finished - number of requests: " + currentRequest, this.getClass(), logFile);
@@ -267,7 +271,8 @@ public class OaiHarvester implements RunnableStoppable {
                     harvestFinishedOutputStream.write(("Harvest Finished.").getBytes("UTF-8"));
                     harvestFinishedOutputStream.close();
                     listRecords = null;
-                } else {
+                }
+                else {
                     StringUtil.simpleLog("ResumptionToken: " + resumptionToken, this.getClass(), logFile);
 
                     OutputStream resumptionOutputStream = new FileOutputStream(resumptionTokenPath);
@@ -276,8 +281,21 @@ public class OaiHarvester implements RunnableStoppable {
                     resumptionOutputStream.close();
 
                     listRecords = getListRecordsWithRetries(resumptionToken, MAX_OAI_VERB_RETRIES);
-                    ingestionRecords += listRecords.getDocument().getElementsByTagName("record").getLength();
+                    batchCounter = listRecords.getDocument().getElementsByTagName("record").getLength();
+                    if(batchCounter == 0)
+                      batchCounter = listRecords.getDocument().getElementsByTagNameNS("http://www.openarchives.org/OAI/2.0/", "record").getLength();
+                    isResponseEmpty = (batchCounter == 0 ? true : false);
+                    ingestionRecords += batchCounter;
 
+                }
+                
+                if (listRecords == null || listRecords.isResultEmpty() || isResponseEmpty) {
+                    if(currentRequest == 1)
+                        StringUtil.simpleLog("Response was an empty list in operation ListRecords (may be invalid set or does not exist new records from the last ingest)", this.getClass(), logFile);
+                    else if(resumptionToken != null && !resumptionToken.equals(""))
+                        StringUtil.simpleLog("Response with resumptionToken: " + resumptionToken + " was an empty list in operation ListRecords " +
+                                "(may be invalid set or does not exist new records from the last ingest)", this.getClass(), logFile);
+                  lastResumptionEmptyList = true;
                 }
 
                 long totalTime = ((new Date()).getTime() - startTime) / 1000;
@@ -308,6 +326,10 @@ public class OaiHarvester implements RunnableStoppable {
 
     public boolean isHarvestFinished() {
         return getHarvestFinishedFile().exists();
+    }
+    
+    public boolean isLastResumptionWithEmptyList(){
+      return lastResumptionEmptyList;
     }
 
     public File getHarvestFinishedFile() {
