@@ -1,34 +1,13 @@
 package pt.utl.ist.oai;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.sql.SQLException;
-import java.text.NumberFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
-import javax.xml.bind.annotation.XmlAccessType;
-import javax.xml.bind.annotation.XmlAccessorType;
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlRootElement;
-import javax.xml.transform.TransformerConfigurationException;
-
+import com.wordnik.swagger.annotations.ApiModel;
+import com.wordnik.swagger.annotations.ApiModelProperty;
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 import org.dom4j.DocumentException;
 import org.dom4j.Element;
 import org.oclc.oai.harvester.verb.ListIdentifiers;
 import org.w3c.dom.NodeList;
-
 import pt.utl.ist.configuration.ConfigSingleton;
 import pt.utl.ist.dataProvider.DataProvider;
 import pt.utl.ist.dataProvider.DataSource;
@@ -45,8 +24,15 @@ import pt.utl.ist.util.StringUtil;
 import pt.utl.ist.util.TimeUtil;
 import pt.utl.ist.util.date.DateUtil;
 
-import com.wordnik.swagger.annotations.ApiModel;
-import com.wordnik.swagger.annotations.ApiModelProperty;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.transform.TransformerConfigurationException;
+import java.io.*;
+import java.sql.SQLException;
+import java.text.NumberFormat;
+import java.util.*;
 
 /**
  * Implementation of a DataSource that makes requests to a OAI-PMH Provider and
@@ -236,10 +222,12 @@ public class OaiDataSource extends DataSource{
                     harvester.stop();
                     if (forceStopExecution) {
                         LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.ERROR.name(), id, lastIngestCount, lastIngestDeletedCount);
+                        ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                         return Task.Status.FORCE_EMPTY;
                     }
                     StringUtil.simpleLog("Received stop signal: exiting import.", this.getClass(), logFile);
                     LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.CANCELED.name(), id, lastIngestCount, lastIngestDeletedCount);
+                    ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                     return Task.Status.CANCELED;
                 }
                 while (!currentRequestFile.exists()) { // Wait for the Harvester to write the request file
@@ -247,10 +235,12 @@ public class OaiDataSource extends DataSource{
                         harvester.stop();
                         if (forceStopExecution) {
                             LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.ERROR.name(), id, lastIngestCount, lastIngestDeletedCount);
+                            ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                             return Task.Status.FORCE_EMPTY;
                         }
                         StringUtil.simpleLog("Received stop signal: exiting import.", this.getClass(), logFile);
                         LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.CANCELED.name(), id, lastIngestCount, lastIngestDeletedCount);
+                        ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                         return Task.Status.CANCELED;
                     }
                     if (harvester.isHarvestFinished()) {
@@ -259,18 +249,31 @@ public class OaiDataSource extends DataSource{
 
                         harvester.cleanUp();
                         LogUtil.endLogInfo(logFile, startIngestTime, new Date(), ingestStatus.name(), id, lastIngestCount, lastIngestDeletedCount);
+                        ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                         return ingestStatus;
                     }
                     if (harvester.getRequestFileNoRecords().exists()) {
                         //StringUtil.simpleLog("Harvester result: " + harvester.readErrorCode(), this.getClass(), logFile);
                         LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.OK.name(), id, lastIngestCount, lastIngestDeletedCount);
+                        ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                         return Task.Status.OK;
                     }
 
                     if (!harvesterThread.isAlive() && !harvester.isHarvestFinished() && getMaxRecord4Sample() == -1) {
+                      if(harvester.isLastResumptionWithEmptyList())
+                      {
+                        StringUtil.simpleLog("Ingest Process ended with warnings. Exiting.", this.getClass(), logFile);
+                        LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.WARNING.name(), id, lastIngestCount, lastIngestDeletedCount);
+                        ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
+                        return Task.Status.WARNINGS;
+                      }
+                      else
+                      {
                         StringUtil.simpleLog("Harvester thread exited without finishing. Exiting ingesting Data Source Oai.", this.getClass(), logFile);
                         LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.ERROR.name(), id, lastIngestCount, lastIngestDeletedCount);
+                        ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                         return Task.Status.FAILED;
+                      }
                     }
                     Thread.sleep(1000);
                 }
@@ -287,7 +290,7 @@ public class OaiDataSource extends DataSource{
                 }
 
                 // Split the OAI-PMH answer to Records and import them
-                Map<String, RecordRepox> batchRecordsWithoutDuplicates = new HashMap<String, RecordRepox>();
+//                Map<String, RecordRepox> batchRecordsWithoutDuplicates = new HashMap<String, RecordRepox>();
                 TimeUtil.getTimeSinceLastTimerArray(9);
                 ResponseTransformer responseTransformer = new ResponseTransformer();
                 List<RecordRepox> responseRecords;
@@ -299,30 +302,35 @@ public class OaiDataSource extends DataSource{
                     responseRecords = responseTransformer.splitResponseToRecords(currentRequestFile, this, logFile);
                 }
 
-                // to avoid records with duplicated ID's
-                for (RecordRepox responseRecord : responseRecords) {
-                    batchRecordsWithoutDuplicates.put(responseRecord.getId().toString(), responseRecord);
-                }
+//                // to avoid records with duplicated ID's
+//                for (RecordRepox responseRecord : responseRecords) {
+//                    batchRecordsWithoutDuplicates.put(responseRecord.getId().toString(), responseRecord);
+//                }
 
-                List<RecordRepox> batchRecords = new ArrayList<RecordRepox>(batchRecordsWithoutDuplicates.values());
-                lastIngestCount += batchRecords.size();
+//                List<RecordRepox> batchRecords = new ArrayList<RecordRepox>(batchRecordsWithoutDuplicates.values());
+//                lastIngestCount += responseRecords.size();
 
                 log.info("Time for splitting " + responseRecords.size() + " records from response file: " + TimeUtil.getTimeSinceLastTimerArray(9));
 
-                while (batchRecords.size() > RECORDS_BATCH_SIZE) {
-                    List<RecordRepox> recordsToImport = batchRecords.subList(0, RECORDS_BATCH_SIZE);
-                    batchRecords = batchRecords.subList(RECORDS_BATCH_SIZE, batchRecords.size());
+                while (responseRecords.size() > RECORDS_BATCH_SIZE) {
+                    List<RecordRepox> recordsToImport = responseRecords.subList(0, RECORDS_BATCH_SIZE);
+                    responseRecords = responseRecords.subList(RECORDS_BATCH_SIZE, responseRecords.size());
 
                     ConfigSingleton.getRepoxContextUtil().getRepoxManager().getAccessPointsManager().processRecords(this, recordsToImport, logFile);
 
                     log.info("Time for importing " + recordsToImport.size() + " records to DB: " + TimeUtil.getTimeSinceLastTimerArray(9));
                 }
-                if (!batchRecords.isEmpty()) {
-                    ConfigSingleton.getRepoxContextUtil().getRepoxManager().getAccessPointsManager().processRecords(this, batchRecords, logFile);
-                    log.info("Time for importing last " + batchRecords.size() + " records to DB: " + TimeUtil.getTimeSinceLastTimerArray(9));
+                if (!responseRecords.isEmpty()) {
+                    ConfigSingleton.getRepoxContextUtil().getRepoxManager().getAccessPointsManager().processRecords(this, responseRecords, logFile);
+                    log.info("Time for importing last " + responseRecords.size() + " records to DB: " + TimeUtil.getTimeSinceLastTimerArray(9));
                 }
 
-                addDeletedRecords(batchRecords);
+//                addDeletedRecords(responseRecords);
+
+                recordCount = ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().getRecordCount(id, true);
+                lastIngestCount = recordCount.getCount();
+                lastIngestDeletedCount = recordCount.getDeleted();
+
 
                 currentRequestFile.delete();
                 currentRequest++;
@@ -337,16 +345,19 @@ public class OaiDataSource extends DataSource{
                 harvester.stop();
                 if (forceStopExecution) {
                     LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.ERROR.name(), id, lastIngestCount, lastIngestDeletedCount);
+                    ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                     return Task.Status.FORCE_EMPTY;
                 }
                 StringUtil.simpleLog("Received stop signal: exiting import.", this.getClass(), logFile);
                 LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.CANCELED.name(), id, lastIngestCount, lastIngestDeletedCount);
+                ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
                 return Task.Status.CANCELED;
             }
             log.error("Error ingesting : " + e.getMessage(), e);
             harvester.stop();
             StringUtil.simpleLog("Error ingesting. Exiting ingesting Data Source Oai.", e, this.getClass(), logFile);
             LogUtil.endLogInfo(logFile, startIngestTime, new Date(), StatusDS.ERROR.name(), id, lastIngestCount, lastIngestDeletedCount);
+            ConfigSingleton.getRepoxContextUtil().getRepoxManager().getRecordCountManager().saveRecordCounts();
             return Task.Status.ERRORS;
         }
     }

@@ -1,63 +1,19 @@
 package pt.utl.ist.dataProvider;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.sql.SQLException;
-import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.regex.Pattern;
-
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
-import org.dom4j.Document;
-import org.dom4j.DocumentException;
-import org.dom4j.DocumentHelper;
-import org.dom4j.Element;
-import org.dom4j.Node;
+import org.dom4j.*;
 import org.dom4j.io.SAXReader;
 import org.dom4j.io.XMLWriter;
-
 import pt.utl.ist.accessPoint.AccessPoint;
 import pt.utl.ist.accessPoint.manager.DefaultAccessPointsManager;
 import pt.utl.ist.configuration.ConfigSingleton;
 import pt.utl.ist.configuration.DefaultRepoxConfiguration;
-import pt.utl.ist.dataProvider.dataSource.DataSourceTag;
-import pt.utl.ist.dataProvider.dataSource.DataSourceUtil;
-import pt.utl.ist.dataProvider.dataSource.FileExtractStrategy;
-import pt.utl.ist.dataProvider.dataSource.FileRetrieveStrategy;
-import pt.utl.ist.dataProvider.dataSource.IdExtractedRecordIdPolicy;
-import pt.utl.ist.dataProvider.dataSource.IdGeneratedRecordIdPolicy;
-import pt.utl.ist.dataProvider.dataSource.IdProvidedRecordIdPolicy;
-import pt.utl.ist.dataProvider.dataSource.RecordIdPolicy;
-import pt.utl.ist.dataProvider.dataSource.SimpleFileExtractStrategy;
-import pt.utl.ist.externalServices.ExternalRestService;
-import pt.utl.ist.externalServices.ExternalServiceNoMonitor;
-import pt.utl.ist.externalServices.ExternalServiceStates;
-import pt.utl.ist.externalServices.ExternalServiceType;
-import pt.utl.ist.externalServices.ServiceParameter;
+import pt.utl.ist.dataProvider.dataSource.*;
+import pt.utl.ist.externalServices.*;
 import pt.utl.ist.ftp.FtpFileRetrieveStrategy;
 import pt.utl.ist.http.HttpFileRetrieveStrategy;
-import pt.utl.ist.marc.CharacterEncoding;
-import pt.utl.ist.marc.DirectoryImporterDataSource;
-import pt.utl.ist.marc.FolderFileRetrieveStrategy;
-import pt.utl.ist.marc.Iso2709FileExtractStrategy;
-import pt.utl.ist.marc.MarcXchangeFileExtractStrategy;
+import pt.utl.ist.marc.*;
 import pt.utl.ist.marc.iso2709.shared.Iso2709Variant;
 import pt.utl.ist.metadataSchemas.MetadataSchemaManager;
 import pt.utl.ist.metadataSchemas.MetadataSchemaVersion;
@@ -66,31 +22,26 @@ import pt.utl.ist.metadataTransformation.MetadataTransformationManager;
 import pt.utl.ist.oai.OaiDataSource;
 import pt.utl.ist.recordPackage.RecordRepox;
 import pt.utl.ist.sru.SruRecordUpdateDataSource;
-import pt.utl.ist.task.DataSourceExportTask;
-import pt.utl.ist.task.DataSourceIngestTask;
-import pt.utl.ist.task.DataSourceTask;
-import pt.utl.ist.task.OldTask;
-import pt.utl.ist.task.ScheduledTask;
-import pt.utl.ist.task.Task;
-import pt.utl.ist.util.CompareDataUtil;
-import pt.utl.ist.util.ExternalServiceUtil;
-import pt.utl.ist.util.FileUtil;
-import pt.utl.ist.util.InvalidInputException;
-import pt.utl.ist.util.ProviderType;
-import pt.utl.ist.util.TimeUtil;
-import pt.utl.ist.util.Urn;
-import pt.utl.ist.util.XmlUtil;
+import pt.utl.ist.task.*;
+import pt.utl.ist.util.*;
 import pt.utl.ist.util.date.DateUtil;
 import pt.utl.ist.util.exceptions.AlreadyExistsException;
 import pt.utl.ist.util.exceptions.IncompatibleInstanceException;
 import pt.utl.ist.util.exceptions.InvalidArgumentsException;
 import pt.utl.ist.util.exceptions.ObjectNotFoundException;
-import pt.utl.ist.z3950.DataSourceZ3950;
-import pt.utl.ist.z3950.Harvester;
-import pt.utl.ist.z3950.IdListHarvester;
-import pt.utl.ist.z3950.IdSequenceHarvester;
-import pt.utl.ist.z3950.Target;
-import pt.utl.ist.z3950.TimestampHarvester;
+import pt.utl.ist.z3950.*;
+
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+import java.io.*;
+import java.net.URL;
+import java.net.URLConnection;
+import java.sql.SQLException;
+import java.text.ParseException;
+import java.util.*;
+import java.util.regex.Pattern;
 
 public class DefaultDataManager implements DataManager {
   private static final Logger log = Logger.getLogger(DefaultDataManager.class);
@@ -497,7 +448,8 @@ public class DefaultDataManager implements DataManager {
                   currentDataSourceElement.attributeValue("isoImplementationClass");
               extractStrategy = new Iso2709FileExtractStrategy(isoImplementationClass);
             } else if (extractStrategyString.equals(MarcXchangeFileExtractStrategy.class
-                .getSimpleName()) || extractStrategyString.equals(MarcXchangeFileExtractStrategy.OLDCLASS)) {
+                .getSimpleName())
+                || extractStrategyString.equals(MarcXchangeFileExtractStrategy.OLDCLASS)) {
               extractStrategy = new MarcXchangeFileExtractStrategy();
             } else if (extractStrategyString
                 .equals(SimpleFileExtractStrategy.class.getSimpleName())
@@ -568,7 +520,7 @@ public class DefaultDataManager implements DataManager {
 
               harvestMethod = new IdSequenceHarvester(target, maximumId);
             }
-            
+
             dataSource =
                 new DataSourceZ3950(dataProvider, id, description, schema, namespace,
                     harvestMethod, recordIdPolicy, metadataTransformations);
@@ -709,13 +661,12 @@ public class DefaultDataManager implements DataManager {
             // export path
             if (currentDataSourceElement.elementText("exportDirPath") != null
                 && !currentDataSourceElement.elementText("exportDirPath").isEmpty())
-              dataSource.setExportDir(currentDataSourceElement.elementText("exportDirPath"));
+              // dataSource.setExportDir(currentDataSourceElement.elementText("exportDirPath"));
+              dataSource.setExportDir(configuration.getExportDefaultFolder() + "/" + id);
             else {
-              File newExportDir =
-                  new File(defaultExportDir.getAbsolutePath() + File.separator + dataSource.getId()
-                      + File.separator + "export");
+              // File newExportDir = new File(configuration.getExportDefaultFolder() + "/" + id);
               // FileUtils.forceMkdir(newExportDir);
-              dataSource.setExportDir(newExportDir.getAbsolutePath());
+              dataSource.setExportDir(configuration.getExportDefaultFolder() + "/" + id);
             }
 
             // Create new MDR schema if it doesn't exist
@@ -941,7 +892,8 @@ public class DefaultDataManager implements DataManager {
       saveData();
       return newAggregator;
     } else
-      throw new AlreadyExistsException("Aggregator " + newAggregator.getId() + " already exists!");
+      throw new AlreadyExistsException("Aggregator " + newAggregator.getId() + " already exists!",
+          newAggregator.getId());
   }
 
   /**
@@ -1249,7 +1201,7 @@ public class DefaultDataManager implements DataManager {
           // generated
           if (checkIfDataProviderExists(aggregatorId, newDataProvider)) {
             throw new AlreadyExistsException("DataProvider " + newDataProvider.getId()
-                + " already exists!");
+                + " already exists!", newDataProvider.getId());
           }
           currentAggregator.addDataProvider(newDataProvider);
           break;
@@ -2177,15 +2129,18 @@ public class DefaultDataManager implements DataManager {
         newId = DataSource.generateId(name);
 
       if (checkIfDataSourceExists(newId))
-        throw new AlreadyExistsException("DataSource " + newId + " already exists!");
+        throw new AlreadyExistsException("DataSource " + newId + " already exists!", newId);
 
       // validate the URL server
-      String newOaiSourceURL = oaiSourceURL;
+      String newOaiSourceURL = oaiSourceURL.trim();
       if (!newOaiSourceURL.startsWith("http://") && !newOaiSourceURL.startsWith("https://")) {
         newOaiSourceURL = "http://" + newOaiSourceURL;
       }
 
-      if (new java.net.URL(newOaiSourceURL).openConnection().getHeaderField(0) != null
+      URL url = new URL(newOaiSourceURL);
+      URLConnection urlConnection = url.openConnection();
+      urlConnection.setConnectTimeout(5000);
+      if (urlConnection.getHeaderField(0) != null
           && FileUtil.checkUrl(newOaiSourceURL)) {
         DataSource newDataSource =
             new OaiDataSource(dataProvider, newId, description, schema, namespace, metadataFormat,
@@ -2276,7 +2231,7 @@ public class DefaultDataManager implements DataManager {
         newId = DataSource.generateId(name);
 
       if (checkIfDataSourceExists(newId))
-        throw new AlreadyExistsException("DataSource " + newId + " already exists!");
+        throw new AlreadyExistsException("DataSource " + newId + " already exists!", newId);
 
       if (charset == null || charset.equals(""))
         throw new InvalidArgumentsException("charset is missing");
@@ -2386,7 +2341,7 @@ public class DefaultDataManager implements DataManager {
         newId = DataSource.generateId(name);
 
       if (checkIfDataSourceExists(newId))
-        throw new AlreadyExistsException("DataSource " + newId + " already exists!");
+        throw new AlreadyExistsException("DataSource " + newId + " already exists!", newId);
 
       if (charset == null || charset.equals(""))
         throw new InvalidArgumentsException("charset is missing");
@@ -2495,7 +2450,7 @@ public class DefaultDataManager implements DataManager {
         newId = DataSource.generateId(name);
 
       if (checkIfDataSourceExists(newId))
-        throw new AlreadyExistsException("DataSource " + newId + " already exists!");
+        throw new AlreadyExistsException("DataSource " + newId + " already exists!", newId);
 
       if (charset == null || charset.equals(""))
         throw new InvalidArgumentsException("charset is missing");
@@ -2599,7 +2554,7 @@ public class DefaultDataManager implements DataManager {
         newId = DataSource.generateId(name);
 
       if (checkIfDataSourceExists(newId))
-        throw new AlreadyExistsException("DataSource " + newId + " already exists!");
+        throw new AlreadyExistsException("DataSource " + newId + " already exists!", newId);
 
       String accessType;
       if ((user != null && user.equals("")) || user == null) {
@@ -2729,7 +2684,7 @@ public class DefaultDataManager implements DataManager {
         newId = DataSource.generateId(name);
 
       if (checkIfDataSourceExists(newId))
-        throw new AlreadyExistsException("DataSource " + newId + " already exists!");
+        throw new AlreadyExistsException("DataSource " + newId + " already exists!", newId);
 
       if (url.equals("") || !FileUtil.checkUrl(url))
         throw new InvalidArgumentsException("url");
@@ -2841,7 +2796,7 @@ public class DefaultDataManager implements DataManager {
         newId = DataSource.generateId(name);
 
       if (checkIfDataSourceExists(newId))
-        throw new AlreadyExistsException("DataSource " + newId + " already exists!");
+        throw new AlreadyExistsException("DataSource " + newId + " already exists!", newId);
 
       FileRetrieveStrategy retrieveStrategy = new FolderFileRetrieveStrategy();
 

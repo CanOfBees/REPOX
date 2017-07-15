@@ -5,7 +5,7 @@
 	<parent>
 		<artifactId>repox-system</artifactId>
 		<groupId>repox</groupId>
-		<version>3.0.1-SNAPSHOT</version>
+		<version>3.2.1-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
@@ -135,6 +135,25 @@
 									</resources>
 								</configuration>
 							</execution>
+							<execution>
+								<id>copy-resources-security</id>
+								<phase>process-resources</phase>
+								<goals>
+									<goal>copy-resources</goal>
+								</goals>
+								<configuration>
+									<outputDirectory>src/main/webapp/WEB-INF</outputDirectory>
+									<resources>
+										<resource>
+											<directory>../server/rest-jersey/src/main/webapp/WEB-INF</directory>
+											<filtering>true</filtering>
+											<includes>
+												<include>security.xml</include>
+											</includes>
+										</resource>
+									</resources>
+								</configuration>
+							</execution>
 						</executions>
 					</plugin>
 				</plugins>
@@ -161,6 +180,7 @@
 									</includes>
 									<followSymlinks>false</followSymlinks>
 								</fileset>
+
 
 								<!-- Clean gwt directories, that were generated if gwt compile was 
 									used -->
@@ -360,6 +380,11 @@
 					<artifactId>slf4j-api</artifactId>
 				</exclusion>
 			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<version>1.7.12</version>
 		</dependency>
 		<dependency>
 			<groupId>pt.ist</groupId>

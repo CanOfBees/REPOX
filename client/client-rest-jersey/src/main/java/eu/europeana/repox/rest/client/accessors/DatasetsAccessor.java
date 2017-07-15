@@ -240,7 +240,7 @@ public class DatasetsAccessor {
       case 409:
         errorMessage = response.readEntity(Result.class);
         LOGGER.warn("createDatasetOai(..) failure! : " + errorMessage.getResult());
-        throw new AlreadyExistsException(errorMessage.getResult());
+        throw new AlreadyExistsException(errorMessage.getResult(), errorMessage.getResult().substring(errorMessage.getResult().indexOf("<") + 1, errorMessage.getResult().indexOf(">")));
       case 500:
         errorMessage = response.readEntity(Result.class);
         LOGGER.warn("createDatasetOai(..) failure! : " + errorMessage.getResult());
@@ -322,7 +322,7 @@ public class DatasetsAccessor {
       case 409:
         errorMessage = response.readEntity(Result.class);
         LOGGER.warn("createDatasetFile(..) failure! : " + errorMessage.getResult());
-        throw new AlreadyExistsException(errorMessage.getResult());
+        throw new AlreadyExistsException(errorMessage.getResult(), errorMessage.getResult().substring(errorMessage.getResult().indexOf("<") + 1, errorMessage.getResult().indexOf(">")));
       case 500:
         errorMessage = response.readEntity(Result.class);
         LOGGER.warn("createDatasetFile(..) failure! : " + errorMessage.getResult());
