@@ -1,3 +1,8 @@
+**DOUBLE CAUTION**
+You're looking at a fork of the Europeana REPOX project.
+
+I've updated the XSLT processor from Saxon v8.7 to Saxon-HE v9.8.0-12. Things may (or may not) work correctly.
+
 **CAUTION!**  
 **The information below is subject to change**
 
