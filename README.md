@@ -1,5 +1,6 @@
 **DOUBLE CAUTION**
-You're looking at a fork of the Europeana REPOX project.
+
+You're looking at a fork of the [Europeana REPOX project](https://github.com/europeana/repox).
 
 I've updated the XSLT processor from Saxon v8.7 to Saxon-HE v9.8.0-12. Things may (or may not) work correctly.
 
