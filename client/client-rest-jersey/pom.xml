@@ -74,11 +74,11 @@
 		</dependency>
 	</dependencies>
 
-	<distributionManagement>
+	<!--<distributionManagement>
 		<snapshotRepository>
 			<id>artifactory.eanadev.org</id>
 			<name>artifactory.eanadev.org-snapshots</name>
 			<url>http://artifactory.eanadev.org/artifactory/ext-snapshot-local</url>
 		</snapshotRepository>
-	</distributionManagement>
+	</distributionManagement>-->
 </project>
